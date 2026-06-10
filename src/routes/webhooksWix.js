@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { syncFromWix } from '../sync/engine.js';
 import { upsertByEmail, ensureProperty } from '../auth/hubspot.js';
 import { registerInstance } from '../auth/wix.js';
-import { getContact as getWixContact } from '../auth/wixContacts.js';
+import { getContact as getWixContact, normalize as normalizeWixContact } from '../auth/wixContacts.js';
 import { prisma, safeLog } from '../store/db.js';
 
 export const wixWebhookRouter = Router();
@@ -32,6 +32,34 @@ function decodeJwtPayload(jwt) {
   const part = jwt.split('.')[1];
   if (!part) throw new Error('not a JWT');
   return JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
+}
+
+/** Recursively JSON.parse any stringified-JSON values so the whole event is one object. */
+function deepParse(node, depth = 0) {
+  if (depth > 8) return node;
+  if (typeof node === 'string') {
+    const t = node.trim();
+    if (t.startsWith('{') || t.startsWith('[')) { try { return deepParse(JSON.parse(t), depth + 1); } catch { return node; } }
+    return node;
+  }
+  if (Array.isArray(node)) return node.map((v) => deepParse(v, depth + 1));
+  if (node && typeof node === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(node)) out[k] = deepParse(v, depth + 1);
+    return out;
+  }
+  return node;
+}
+
+/** Find the Wix contact resource inside the event (it has an `info` block). */
+function findContactEntity(node, depth = 0) {
+  if (node == null || depth > 8 || typeof node !== 'object') return null;
+  if (node.info && (node.id || node.revision)) return node;
+  for (const v of Object.values(node)) {
+    const found = findContactEntity(v, depth + 1);
+    if (found) return found;
+  }
+  return null;
 }
 
 /** Wix nests + sometimes stringifies payloads — search recursively for a key. */
@@ -79,21 +107,34 @@ async function ensureUtmProps() {
 wixWebhookRouter.post('/contacts', text({ type: '*/*' }), async (req, res) => {
   res.json({ received: true });
   try {
-    const event = parseWixBody(req);
-    const contactId = findKey(event, 'entityId') || event.contactId || event.id;
+    // Wix wraps the event as a JWT whose `data` is doubly-stringified JSON.
+    // deepParse turns the whole thing into a plain object we can read.
+    const event = deepParse(parseWixBody(req));
+    const contactId = findKey(event, 'entityId') || findKey(event, 'contactId');
     if (!contactId) { safeLog('[webhook wix] contacts: no entityId in payload'); return; }
 
-    // Prefer the live contact (authoritative); fall back to inline body data.
+    // Read the contact straight from the event payload when present
+    // (createdEvent.entity / updatedEvent.currentEntity); otherwise fetch it live.
     let flatWix, updatedAt;
-    try {
-      const current = await getWixContact(DEFAULT_SITE, String(contactId));
-      flatWix = current.flat; updatedAt = current.updatedAt;
-    } catch {
-      const inline = event.contact || event.flat || event;
-      flatWix = pickFlat(inline); updatedAt = event.updatedAt;
+    const entity = findContactEntity(event);
+    if (entity) {
+      const n = normalizeWixContact(entity);
+      flatWix = n.flat; updatedAt = n.updatedAt;
+    } else {
+      try {
+        const current = await getWixContact(DEFAULT_SITE, String(contactId));
+        flatWix = current.flat; updatedAt = current.updatedAt;
+      } catch (e) {
+        if (e.response?.data?.details?.applicationError?.code === 'CONTACT_NOT_FOUND') {
+          safeLog(`[webhook wix] contact ${contactId} not found (likely a Test payload) — skipping`);
+          return;
+        }
+        throw e;
+      }
     }
 
-    await syncFromWix({ siteId: DEFAULT_SITE, wixContactId: String(contactId), flatWix, updatedAt });
+    const r = await syncFromWix({ siteId: DEFAULT_SITE, wixContactId: String(contactId), flatWix, updatedAt });
+    safeLog(`[webhook wix] contact ${contactId} → ${r.status}`);
   } catch (err) {
     safeLog('[webhook wix] contact sync failed:', err.response?.data || err.message);
   }
