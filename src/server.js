@@ -18,20 +18,20 @@ const app = express();
 // Capture raw body for webhook signature verification.
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
-// ─── Health & connectivity ────────────────────────────────
+// Health & connectivity
 app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 app.get('/health/hubspot', async (_req, res) => {
   try { res.json(await ping()); }
   catch (err) { res.status(502).json({ ok: false, error: err.response?.status || err.message }); }
 });
 
-// ─── Routes ───────────────────────────────────────────────
+// Routes
 app.use('/auth', connectionRouter);            // Wix OAuth + status/disconnect
 app.use('/api/mappings', mappingsRouter);      // Field-mapping CRUD (API-key guarded)
 app.use('/webhooks/hubspot', hubspotWebhookRouter); // Inbound HubSpot → Wix
 app.use('/webhooks/wix', wixWebhookRouter);    // Inbound Wix → HubSpot + form capture
 
-// ─── Manual sync trigger (guarded) — for testing without live webhooks ────────
+// ─── Manual sync trigger (guarded) — for testing without live webhooks
 app.post('/api/sync/from-wix', requireApiKey, async (req, res) => {
   try {
     const { wixContactId, flatWix, updatedAt } = req.body;

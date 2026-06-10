@@ -4,4 +4,5 @@ node_modules/
 *.db-journal
 dist/
 .idea/
+.claude
 .DS_Store
