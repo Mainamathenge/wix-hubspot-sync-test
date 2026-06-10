@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Connection {
+  id                String   @id @default(cuid())
+  siteId            String   @unique // Wix site/instance id
+
+  // Wix app-instance id (identifies the installed site). Used to mint tokens
+  // via the client_credentials grant — no refresh token in the new model.
+  wixInstanceId     String?
+
+  // Cached short-lived (~4h) Wix access token + its expiry.
+  wixAccessToken    String?  // encrypted (ciphertext:iv:authTag)
+  wixTokenExpiry    DateTime?
+
+  hubspotToken      String?  // encrypted private-app token
+
+  status            String   @default("connected") // connected | disconnected
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model FieldMapping {
+  id              String  @id @default(cuid())
+  siteId          String
+  wixField        String  // e.g. "firstName"
+  hubspotProperty String  // e.g. "firstname"
+  direction       String  @default("bidirectional") // wixToHubspot | hubspotToWix | bidirectional
+  transform       String? // null | "trim" | "lowercase"
+  createdAt       DateTime @default(now())
+
+  @@unique([siteId, hubspotProperty]) // prevents duplicate HubSpot targets
+  @@index([siteId])
+}
+
+
+model IdLink {
+  id               String   @id @default(cuid())
+  siteId           String
+  wixContactId     String
+  hubspotContactId String
+  createdAt        DateTime @default(now())
+
+  @@unique([siteId, wixContactId])
+  @@unique([siteId, hubspotContactId])
+  @@index([siteId])
+}
+
+
+model SyncLog {
+  id            String   @id @default(cuid())
+  siteId        String
+  correlationId String
+  source        String   // "wix" | "hubspot" — who we wrote TO
+  contactKey    String   // the id on the target system
+  valueHash     String   // hash of the written field values (idempotency)
+  createdAt     DateTime @default(now())
+
+  @@index([siteId, contactKey])
+  @@index([correlationId])
+}
+
+// Minimal observability record for Feature #2 (Wix form → HubSpot lead).
+model FormEvent {
+  id               String   @id @default(cuid())
+  siteId           String
+  formId           String?
+  email            String?
+  utm              String?  // JSON: { source, medium, campaign, term, content }
+  pageUrl          String?
+  referrer         String?
+  hubspotContactId String?
+  createdAt        DateTime @default(now())
+
+  @@index([siteId, createdAt])
+}

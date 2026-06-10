@@ -1,0 +1,31 @@
+{
+  "name": "wix-hubspot-sync",
+  "version": "1.0.0",
+  "description": "Bi-directional contact sync between Wix and HubSpot",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "build": "vite build",
+    "dev:dashboard": "vite",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "test:hubspot": "node src/scripts/test-hubspot.js",
+    "test:sync": "node src/scripts/test-sync.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@wix/crm": "^1.0.0",
+    "@wix/sdk": "^1.15.0",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "prisma": "^5.22.0",
+    "vite": "^5.4.21"
+  }
+}
