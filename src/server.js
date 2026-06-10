@@ -25,6 +25,16 @@ app.get('/health/hubspot', async (_req, res) => {
   catch (err) { res.status(502).json({ ok: false, error: err.response?.status || err.message }); }
 });
 
+// CORS for the browser-side form capture (Velo on the published Wix site posts
+// here cross-origin). Scoped to the form endpoint only; handles the preflight.
+app.use('/webhooks/wix/form', (req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, x-wix-webhook-secret');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // Routes
 app.use('/auth', connectionRouter);            // Wix OAuth + status/disconnect
 app.use('/api/mappings', mappingsRouter);      // Field-mapping CRUD (API-key guarded)
