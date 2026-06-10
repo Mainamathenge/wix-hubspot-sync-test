@@ -1,4 +1,4 @@
-# Wix ↔ HubSpot Integration
+# Wix, HubSpot Integration
 
 Reliable bi-directional contact sync **and** Wix-form lead capture between a Wix site and
 HubSpot, built as a **self-hosted Node/Express app** (no Zapier, no API keys in the frontend).
@@ -9,7 +9,7 @@ HubSpot, built as a **self-hosted Node/Express app** (no Zapier, no API keys in 
 
 ---
 
-## A) API Plan — what each feature uses and why
+## A) API Plan  what each feature uses and why
 
 ### Feature #1 — Bi-directional contact sync
 | Need | API | Why |
@@ -146,6 +146,29 @@ our own write is ignored while a genuine external change is not.
 > The live tests need a **real** `HUBSPOT_ACCESS_TOKEN` in `.env`. The committed `.env.example`
 > ships a placeholder; the offline `test:mapper` runs with no credentials.
 
+---
+
+## Endpoints
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/health` `/health/hubspot` | — | Liveness / HubSpot connectivity |
+| POST | `/webhooks/wix/app-installed` | Wix JWT | Capture instanceId on app install |
+| POST | `/auth/wix/instance` | API key | Manually register a Wix instanceId |
+| GET | `/auth/status` | API key | Connection status (Wix + HubSpot) |
+| POST | `/auth/wix/disconnect` | API key | Disconnect Wix, wipe tokens |
+| GET | `/api/mappings/options` | API key | Dropdown data (Wix fields, HubSpot props) |
+| GET | `/api/mappings` | API key | List saved mappings |
+| PUT | `/api/mappings` | API key | Save mappings (validates dupes/direction) |
+| POST | `/api/sync/from-wix` | API key | Manual Wix→HubSpot sync (testing) |
+| POST | `/api/sync/from-hubspot` | API key | Manual HubSpot→Wix sync (testing) |
+| POST | `/webhooks/hubspot` | HMAC signature | Inbound HubSpot → Wix |
+| POST | `/webhooks/wix/contacts` | Wix JWT | Inbound Wix → HubSpot (Contact created/updated) |
+| POST | `/webhooks/wix/form` | shared secret | **Feature #2** form capture |
+
+API-key endpoints expect `Authorization: Bearer <DASHBOARD_API_KEY>`.
+
+---
 
 ## Field mapping
 
@@ -159,7 +182,7 @@ Supported Wix fields out of the box: `firstName`, `lastName`, `email`, `phone`, 
 
 ---
 
-## Feature #2 — Wix form → HubSpot (UTM attribution)
+## Feature #2  Wix form HubSpot (UTM attribution)
 
 On the Wix site, send each submission to `POST {PUBLIC_URL}/webhooks/wix/form`. Velo example:
 
