@@ -146,29 +146,6 @@ our own write is ignored while a genuine external change is not.
 > The live tests need a **real** `HUBSPOT_ACCESS_TOKEN` in `.env`. The committed `.env.example`
 > ships a placeholder; the offline `test:mapper` runs with no credentials.
 
----
-
-## Endpoints
-
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| GET | `/health` `/health/hubspot` | — | Liveness / HubSpot connectivity |
-| POST | `/webhooks/wix/app-installed` | Wix JWT | Capture instanceId on app install |
-| POST | `/auth/wix/instance` | API key | Manually register a Wix instanceId |
-| GET | `/auth/status` | API key | Connection status (Wix + HubSpot) |
-| POST | `/auth/wix/disconnect` | API key | Disconnect Wix, wipe tokens |
-| GET | `/api/mappings/options` | API key | Dropdown data (Wix fields, HubSpot props) |
-| GET | `/api/mappings` | API key | List saved mappings |
-| PUT | `/api/mappings` | API key | Save mappings (validates dupes/direction) |
-| POST | `/api/sync/from-wix` | API key | Manual Wix→HubSpot sync (testing) |
-| POST | `/api/sync/from-hubspot` | API key | Manual HubSpot→Wix sync (testing) |
-| POST | `/webhooks/hubspot` | HMAC signature | Inbound HubSpot → Wix |
-| POST | `/webhooks/wix/contacts` | Wix JWT | Inbound Wix → HubSpot (Contact created/updated) |
-| POST | `/webhooks/wix/form` | shared secret | **Feature #2** form capture |
-
-API-key endpoints expect `Authorization: Bearer <DASHBOARD_API_KEY>`.
-
----
 
 ## Field mapping
 
@@ -185,27 +162,6 @@ Supported Wix fields out of the box: `firstName`, `lastName`, `email`, `phone`, 
 ## Feature #2 — Wix form → HubSpot (UTM attribution)
 
 On the Wix site, send each submission to `POST {PUBLIC_URL}/webhooks/wix/form`. Velo example:
-
-```js
-// Wix page code — capture UTM from the URL and POST the submission to the backend.
-import wixLocation from 'wix-location';
-
-$w('#myForm').onWixFormSubmit(async (event) => {
-  const f = event.fields; // { email, firstName, ... } depends on your form
-  const q = wixLocation.query; // utm_* params on the landing URL
-  await fetch('https://YOUR_PUBLIC_URL/webhooks/wix/form', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-wix-webhook-secret': 'YOUR_WIX_WEBHOOK_SECRET' },
-    body: JSON.stringify({
-      email: f.email, firstName: f.firstName, lastName: f.lastName,
-      phone: f.phone, company: f.company, formId: 'contact-form',
-      utm: { source: q.utm_source, medium: q.utm_medium, campaign: q.utm_campaign,
-             term: q.utm_term, content: q.utm_content },
-      pageUrl: wixLocation.url, referrer: document.referrer, timestamp: Date.now(),
-    }),
-  });
-});
-```
 
 The backend upserts the HubSpot contact by email and writes attribution to custom contact
 properties (auto-created on first use): `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`,
